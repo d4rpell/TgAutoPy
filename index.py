@@ -5,6 +5,7 @@ import configparser # CONFIGS
 import os
 from tqdm import tqdm # Barra de Progreso
 import time
+import asyncio
 
 config = configparser.ConfigParser()
 config_leer = config.read('credentials.conf')
@@ -72,31 +73,29 @@ async def download_media_with_progress(message):
 
     # Crear barra de progreso
     global bar
-    bar = tqdm(total=message.file.size if message.file else 100, unit="B", unit_scale=True)
+    with tqdm(total=message.file.size if message.file else 100, unit="B", unit_scale=True, desc=file_path, leave=True) as bar:
 
-    saved_path = await client.download_media(message.media, file=file_path, progress_callback=barra_de_progreso)
+        saved_path = await client.download_media(message.media, file=file_path, progress_callback=barra_de_progreso)
+        print(f"Archivo descargado en: {saved_path}")
+    return saved_path
 
-    bar.close()
-
-    print(f"Archivo descargado en: {saved_path}")
+async def download_media_concurrent(messages):
+    tasks = []
+    for message in messages:
+        if message.media:
+            tasks.append(download_media_with_progress(message))
+    await asyncio.gather(*tasks)
 
 async def main():
-
+    messages = []
     await client.start()
+
     async for message in client.iter_messages(channel_username, limit=limite_descargas):
-            if message.media:
-                await download_media_with_progress(message)
+        if message.media:
+            messages.append(message)
+
+    await download_media_concurrent(reversed(messages))
 
 
-# Ejecutar el cliente
 with client:
     client.loop.run_until_complete(main())
-
-
-""" EN CASO DE QUERER QUE EL PROGRAMA SE EJECUTE EN TIEMPO REAL.
-while True:
-    async for message in client.iter_messages(channel_username, limit=limite_descargas):
-        if message.date > tate and message.media:
-            await download_media_with_progress(message)
-    await asyncio.sleep(60) # Esperar 60 segundos para ver si hay algo nuevo
-"""
